@@ -33,7 +33,7 @@ type Target struct {
 	NoCacheFilter    []string            `json:"no-cache-filter"`
 	NoCache          bool                `json:"no-cache"`
 	Output           []map[string]string `json:"output"`
-	Plaforms         []string            `json:"platforms"`
+	Platforms        []string            `json:"platforms"`
 	Pull             bool                `json:"pull"`
 	Secret           []map[string]string `json:"secret"`
 	ShmSize          string              `json:"shm-size"`

@@ -67,12 +67,22 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 			additionalContexts[name] = &buildCtx
 		}
 
+		var platforms []struct{ OS, Arch, Variant string }
+		for _, value := range target.Platforms {
+			os, arch, variant, err := parse.Platform(value)
+			if err != nil {
+				return err
+			}
+			platforms = append(platforms, struct{ OS, Arch, Variant string }{os, arch, variant})
+		}
+
 		options := define.BuildOptions{
 			Args:                    args,
 			ContextDirectory:        contextDir,
 			Target:                  target.Target,
 			AdditionalTags:          target.Tags,
 			AdditionalBuildContexts: additionalContexts,
+			Platforms:               platforms,
 		}
 		_, _, err = imagebuildah.BuildDockerfiles(ctx, store, options, containerfile)
 		if err != nil {
