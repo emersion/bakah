@@ -34,7 +34,7 @@ type Target struct {
 	NoCache          bool                `json:"no-cache"`
 	Output           []map[string]string `json:"output"`
 	Platforms        []string            `json:"platforms"`
-	Pull             bool                `json:"pull"`
+	Pull             string              `json:"pull"`
 	Secret           []map[string]string `json:"secret"`
 	ShmSize          string              `json:"shm-size"`
 	SSH              []map[string]string `json:"ssh"`

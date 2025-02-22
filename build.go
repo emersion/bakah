@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/containers/buildah/define"
 	"github.com/containers/buildah/imagebuildah"
@@ -76,6 +77,11 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 			platforms = append(platforms, struct{ OS, Arch, Variant string }{os, arch, variant})
 		}
 
+		pullPolicy, err := parsePullPolicy(target.Pull)
+		if err != nil {
+			return err
+		}
+
 		options := define.BuildOptions{
 			Args:                    args,
 			Annotations:             target.Annotations,
@@ -85,6 +91,7 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 			AdditionalBuildContexts: additionalContexts,
 			Platforms:               platforms,
 			NoCache:                 target.NoCache,
+			PullPolicy:              pullPolicy,
 		}
 		_, _, err = imagebuildah.BuildDockerfiles(ctx, store, options, containerfile)
 		if err != nil {
@@ -113,4 +120,19 @@ func walkTarget(targets *[]string, seen map[string]struct{}, f *File, name strin
 		return fmt.Errorf("target %q not found", name)
 	}
 	return nil
+}
+
+func parsePullPolicy(value string) (define.PullPolicy, error) {
+	switch strings.ToLower(value) {
+	case "", "true", "missing", "ifmissing", "notpresent":
+		return define.PullIfMissing, nil
+	case "always":
+		return define.PullAlways, nil
+	case "false", "never":
+		return define.PullNever, nil
+	case "ifnewer", "newer":
+		return define.PullIfNewer, nil
+	default:
+		return 0, fmt.Errorf("unknown pull policy %q", value)
+	}
 }
