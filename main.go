@@ -34,7 +34,10 @@ func main() {
 		log.Fatal("Only a single Bake file is supported")
 	}
 
-	// TODO: grab targets from args
+	targetNames := pflag.Args()
+	if len(targetNames) == 0 {
+		targetNames = []string{"default"}
+	}
 
 	f, err := os.Open(filename)
 	if err != nil {
@@ -54,7 +57,7 @@ func main() {
 	defer store.Shutdown(false)
 
 	ctx := context.Background()
-	if err := Build(ctx, store, bakefile, filepath.Dir(filename)); err != nil {
+	if err := Build(ctx, store, bakefile, filepath.Dir(filename), targetNames); err != nil {
 		log.Fatal(err)
 	}
 }

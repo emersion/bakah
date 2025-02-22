@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/containers/buildah/define"
@@ -11,8 +12,18 @@ import (
 	"github.com/containers/storage"
 )
 
-func Build(ctx context.Context, store storage.Store, f *File, dir string) error {
-	for _, target := range f.Target {
+func Build(ctx context.Context, store storage.Store, f *File, dir string, targetNames []string) error {
+	var effectiveTargetNames []string
+	seen := make(map[string]struct{})
+	for _, name := range targetNames {
+		if err := walkTarget(&effectiveTargetNames, seen, f, name); err != nil {
+			return err
+		}
+	}
+
+	for _, targetName := range effectiveTargetNames {
+		target := f.Target[targetName]
+
 		contextDir, err := filepath.Abs(filepath.Join(dir, target.Context))
 		if err != nil {
 			return err
@@ -69,5 +80,25 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string) error 
 		}
 	}
 
+	return nil
+}
+
+func walkTarget(targets *[]string, seen map[string]struct{}, f *File, name string) error {
+	if _, ok := seen[name]; ok {
+		return nil
+	}
+	seen[name] = struct{}{}
+
+	if group, ok := f.Group[name]; ok {
+		for _, dep := range group.Targets {
+			if err := walkTarget(targets, seen, f, dep); err != nil {
+				return err
+			}
+		}
+	} else if _, ok := f.Target[name]; ok {
+		*targets = append(*targets, name)
+	} else {
+		return fmt.Errorf("target %q not found", name)
+	}
 	return nil
 }
