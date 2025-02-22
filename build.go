@@ -22,6 +22,7 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 		}
 	}
 
+	ids := make(map[string]string)
 	for _, targetName := range effectiveTargetNames {
 		target := f.Target[targetName]
 
@@ -50,6 +51,18 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 
 		additionalContexts := make(map[string]*define.AdditionalBuildContext)
 		for name, value := range target.Contexts {
+			if dep, ok := strings.CutPrefix(value, "target:"); ok {
+				depID, ok := ids[dep]
+				if !ok {
+					panic("unreachable")
+				}
+				additionalContexts[name] = &define.AdditionalBuildContext{
+					IsImage: true,
+					Value:   depID,
+				}
+				continue
+			}
+
 			buildCtx, err := parse.GetAdditionalBuildContext(value)
 			if err != nil {
 				return err
@@ -93,10 +106,12 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 			NoCache:                 target.NoCache,
 			PullPolicy:              pullPolicy,
 		}
-		_, _, err = imagebuildah.BuildDockerfiles(ctx, store, options, containerfile)
+		id, _, err := imagebuildah.BuildDockerfiles(ctx, store, options, containerfile)
 		if err != nil {
 			return err
 		}
+
+		ids[targetName] = id
 	}
 
 	return nil
@@ -114,7 +129,14 @@ func walkTarget(targets *[]string, seen map[string]struct{}, f *File, name strin
 				return err
 			}
 		}
-	} else if _, ok := f.Target[name]; ok {
+	} else if target, ok := f.Target[name]; ok {
+		for _, value := range target.Contexts {
+			if dep, ok := strings.CutPrefix(value, "target:"); ok {
+				if err := walkTarget(targets, seen, f, dep); err != nil {
+					return err
+				}
+			}
+		}
 		*targets = append(*targets, name)
 	} else {
 		return fmt.Errorf("target %q not found", name)
