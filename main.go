@@ -57,7 +57,13 @@ func main() {
 	defer store.Shutdown(false)
 
 	ctx := context.Background()
-	if err := Build(ctx, store, bakefile, filepath.Dir(filename), targetNames); err != nil {
+	options := &BuildOptions{
+		Store:   store,
+		File:    bakefile,
+		Dir:     filepath.Dir(filename),
+		Targets: targetNames,
+	}
+	if err := Build(ctx, options); err != nil {
 		log.Fatal(err)
 	}
 }

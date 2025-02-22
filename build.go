@@ -13,20 +13,29 @@ import (
 	"github.com/containers/storage"
 )
 
-func Build(ctx context.Context, store storage.Store, f *File, dir string, targetNames []string) error {
-	var effectiveTargetNames []string
+type BuildOptions struct {
+	Store   storage.Store
+	File    *File
+	Dir     string
+	Targets []string
+}
+
+func Build(ctx context.Context, options *BuildOptions) error {
+	f := options.File
+
+	var targetNames []string
 	seen := make(map[string]struct{})
-	for _, name := range targetNames {
-		if err := walkTarget(&effectiveTargetNames, seen, f, name); err != nil {
+	for _, name := range options.Targets {
+		if err := walkTarget(&targetNames, seen, f, name); err != nil {
 			return err
 		}
 	}
 
 	ids := make(map[string]string)
-	for _, targetName := range effectiveTargetNames {
+	for _, targetName := range targetNames {
 		target := f.Target[targetName]
 
-		contextDir, err := filepath.Abs(filepath.Join(dir, target.Context))
+		contextDir, err := filepath.Abs(filepath.Join(options.Dir, target.Context))
 		if err != nil {
 			return err
 		}
@@ -71,7 +80,7 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 			// GetAdditionalBuildContext resolves paths relative to the current
 			// working directory
 			if !buildCtx.IsImage && !buildCtx.IsURL {
-				p, err := filepath.Abs(filepath.Join(dir, value))
+				p, err := filepath.Abs(filepath.Join(options.Dir, value))
 				if err != nil {
 					return err
 				}
@@ -95,7 +104,7 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 			return err
 		}
 
-		options := define.BuildOptions{
+		buildOptions := define.BuildOptions{
 			Args:                    args,
 			Annotations:             target.Annotations,
 			ContextDirectory:        contextDir,
@@ -106,7 +115,7 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 			NoCache:                 target.NoCache,
 			PullPolicy:              pullPolicy,
 		}
-		id, _, err := imagebuildah.BuildDockerfiles(ctx, store, options, containerfile)
+		id, _, err := imagebuildah.BuildDockerfiles(ctx, options.Store, buildOptions, containerfile)
 		if err != nil {
 			return err
 		}
