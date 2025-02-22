@@ -78,6 +78,7 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 
 		options := define.BuildOptions{
 			Args:                    args,
+			Annotations:             target.Annotations,
 			ContextDirectory:        contextDir,
 			Target:                  target.Target,
 			AdditionalTags:          target.Tags,
