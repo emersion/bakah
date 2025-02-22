@@ -23,9 +23,11 @@ func main() {
 	var (
 		filenames []string
 		layers    bool
+		jobs      int
 	)
 	pflag.StringArrayVar(&filenames, "file", nil, "Build definition file")
 	pflag.BoolVar(&layers, "layers", true, "Cache intermediate images during the build process")
+	pflag.IntVar(&jobs, "jobs", 1, "How many stages to run in parallel")
 	pflag.Parse()
 
 	var filename string
@@ -67,6 +69,7 @@ func main() {
 		Dir:     filepath.Dir(filename),
 		Targets: targetNames,
 		Layers:  layers,
+		Jobs:    jobs,
 	}
 	if err := Build(ctx, options); err != nil {
 		log.Fatal(err)

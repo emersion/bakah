@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"path/filepath"
 	"strings"
 
@@ -11,7 +12,19 @@ import (
 	"github.com/containers/buildah/pkg/parse"
 	"github.com/containers/buildah/pkg/util"
 	"github.com/containers/storage"
+	"golang.org/x/sync/semaphore"
 )
+
+type pendingTarget struct {
+	done chan struct{}
+	id   string
+	err  error
+}
+
+func (pt *pendingTarget) Wait() (string, error) {
+	<-pt.done
+	return pt.id, pt.err
+}
 
 type BuildOptions struct {
 	Store   storage.Store
@@ -19,6 +32,7 @@ type BuildOptions struct {
 	Dir     string
 	Targets []string
 	Layers  bool
+	Jobs    int
 }
 
 func Build(ctx context.Context, options *BuildOptions) error {
@@ -32,20 +46,42 @@ func Build(ctx context.Context, options *BuildOptions) error {
 		}
 	}
 
-	ids := make(map[string]string)
+	pendingTargets := make(map[string]*pendingTarget)
 	for _, targetName := range targetNames {
-		id, err := buildTarget(ctx, options, ids, f.Target[targetName])
-		if err != nil {
-			return err
+		pendingTargets[targetName] = &pendingTarget{
+			done: make(chan struct{}),
 		}
-
-		ids[targetName] = id
 	}
 
-	return nil
+	jobs := int64(options.Jobs)
+	if jobs == 0 {
+		jobs = math.MaxInt64
+	}
+	sem := semaphore.NewWeighted(jobs)
+
+	for targetName, pt := range pendingTargets {
+		pt := pt // capture
+		go func() {
+			defer close(pt.done)
+
+			id, err := buildTarget(ctx, options, sem, pendingTargets, f.Target[targetName])
+			pt.id = id
+			pt.err = err
+		}()
+	}
+
+	var buildErr error
+	for _, pt := range pendingTargets {
+		_, buildErr = pt.Wait()
+		if buildErr != nil {
+			break
+		}
+	}
+
+	return buildErr
 }
 
-func buildTarget(ctx context.Context, options *BuildOptions, ids map[string]string, target *Target) (string, error) {
+func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weighted, pendingTargets map[string]*pendingTarget, target *Target) (string, error) {
 	contextDir, err := filepath.Abs(filepath.Join(options.Dir, target.Context))
 	if err != nil {
 		return "", err
@@ -72,9 +108,13 @@ func buildTarget(ctx context.Context, options *BuildOptions, ids map[string]stri
 	additionalContexts := make(map[string]*define.AdditionalBuildContext)
 	for name, value := range target.Contexts {
 		if dep, ok := strings.CutPrefix(value, "target:"); ok {
-			depID, ok := ids[dep]
+			depPendingTarget, ok := pendingTargets[dep]
 			if !ok {
 				panic("unreachable")
+			}
+			depID, err := depPendingTarget.Wait()
+			if err != nil {
+				return "", err
 			}
 			additionalContexts[name] = &define.AdditionalBuildContext{
 				IsImage: true,
@@ -126,6 +166,7 @@ func buildTarget(ctx context.Context, options *BuildOptions, ids map[string]stri
 		NoCache:                 target.NoCache,
 		PullPolicy:              pullPolicy,
 		Layers:                  options.Layers,
+		JobSemaphore:            sem,
 	}
 	id, _, err := imagebuildah.BuildDockerfiles(ctx, options.Store, buildOptions, containerfile)
 	if err != nil {
