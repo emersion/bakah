@@ -12,7 +12,10 @@ import (
 
 func Build(ctx context.Context, store storage.Store, f *File, dir string) error {
 	for _, target := range f.Target {
-		contextDir := filepath.Join(dir, target.Context)
+		contextDir, err := filepath.Abs(filepath.Join(dir, target.Context))
+		if err != nil {
+			return err
+		}
 
 		var containerfile string
 		if target.Dockerfile != "" {
@@ -38,7 +41,7 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string) error 
 			Target:           target.Target,
 			AdditionalTags:   target.Tags,
 		}
-		_, _, err := imagebuildah.BuildDockerfiles(ctx, store, options, containerfile)
+		_, _, err = imagebuildah.BuildDockerfiles(ctx, store, options, containerfile)
 		if err != nil {
 			return err
 		}
