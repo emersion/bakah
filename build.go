@@ -84,6 +84,7 @@ func Build(ctx context.Context, store storage.Store, f *File, dir string, target
 			AdditionalTags:          target.Tags,
 			AdditionalBuildContexts: additionalContexts,
 			Platforms:               platforms,
+			NoCache:                 target.NoCache,
 		}
 		_, _, err = imagebuildah.BuildDockerfiles(ctx, store, options, containerfile)
 		if err != nil {
