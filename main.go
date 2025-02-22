@@ -20,8 +20,12 @@ func main() {
 
 	unshare.MaybeReexecUsingUserNamespace(false)
 
-	var filenames []string
+	var (
+		filenames []string
+		layers    bool
+	)
 	pflag.StringArrayVar(&filenames, "file", nil, "Build definition file")
+	pflag.BoolVar(&layers, "layers", true, "Cache intermediate images during the build process")
 	pflag.Parse()
 
 	var filename string
@@ -62,6 +66,7 @@ func main() {
 		File:    bakefile,
 		Dir:     filepath.Dir(filename),
 		Targets: targetNames,
+		Layers:  layers,
 	}
 	if err := Build(ctx, options); err != nil {
 		log.Fatal(err)

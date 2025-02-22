@@ -18,6 +18,7 @@ type BuildOptions struct {
 	File    *File
 	Dir     string
 	Targets []string
+	Layers  bool
 }
 
 func Build(ctx context.Context, options *BuildOptions) error {
@@ -114,6 +115,7 @@ func Build(ctx context.Context, options *BuildOptions) error {
 			Platforms:               platforms,
 			NoCache:                 target.NoCache,
 			PullPolicy:              pullPolicy,
+			Layers:                  options.Layers,
 		}
 		id, _, err := imagebuildah.BuildDockerfiles(ctx, options.Store, buildOptions, containerfile)
 		if err != nil {
