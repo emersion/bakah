@@ -6,9 +6,9 @@ import (
 )
 
 type File struct {
-	Target   map[string]Target   `json:"target"`
-	Group    map[string]Group    `json:"group"`
-	Variable map[string]Variable `json:"variable"`
+	Target   map[string]*Target   `json:"target"`
+	Group    map[string]*Group    `json:"group"`
+	Variable map[string]*Variable `json:"variable"`
 	// TODO: function
 }
 

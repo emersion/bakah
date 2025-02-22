@@ -34,90 +34,7 @@ func Build(ctx context.Context, options *BuildOptions) error {
 
 	ids := make(map[string]string)
 	for _, targetName := range targetNames {
-		target := f.Target[targetName]
-
-		contextDir, err := filepath.Abs(filepath.Join(options.Dir, target.Context))
-		if err != nil {
-			return err
-		}
-
-		var containerfile string
-		if target.Dockerfile != "" {
-			containerfile = filepath.Join(contextDir, target.Dockerfile)
-		} else {
-			var err error
-			containerfile, err = util.DiscoverContainerfile(contextDir)
-			if err != nil {
-				return err
-			}
-		}
-
-		args := make(map[string]string)
-		for k, v := range target.Args {
-			if v != nil {
-				args[k] = *v
-			}
-		}
-
-		additionalContexts := make(map[string]*define.AdditionalBuildContext)
-		for name, value := range target.Contexts {
-			if dep, ok := strings.CutPrefix(value, "target:"); ok {
-				depID, ok := ids[dep]
-				if !ok {
-					panic("unreachable")
-				}
-				additionalContexts[name] = &define.AdditionalBuildContext{
-					IsImage: true,
-					Value:   depID,
-				}
-				continue
-			}
-
-			buildCtx, err := parse.GetAdditionalBuildContext(value)
-			if err != nil {
-				return err
-			}
-
-			// GetAdditionalBuildContext resolves paths relative to the current
-			// working directory
-			if !buildCtx.IsImage && !buildCtx.IsURL {
-				p, err := filepath.Abs(filepath.Join(options.Dir, value))
-				if err != nil {
-					return err
-				}
-				buildCtx.Value = p
-			}
-
-			additionalContexts[name] = &buildCtx
-		}
-
-		var platforms []struct{ OS, Arch, Variant string }
-		for _, value := range target.Platforms {
-			os, arch, variant, err := parse.Platform(value)
-			if err != nil {
-				return err
-			}
-			platforms = append(platforms, struct{ OS, Arch, Variant string }{os, arch, variant})
-		}
-
-		pullPolicy, err := parsePullPolicy(target.Pull)
-		if err != nil {
-			return err
-		}
-
-		buildOptions := define.BuildOptions{
-			Args:                    args,
-			Annotations:             target.Annotations,
-			ContextDirectory:        contextDir,
-			Target:                  target.Target,
-			AdditionalTags:          target.Tags,
-			AdditionalBuildContexts: additionalContexts,
-			Platforms:               platforms,
-			NoCache:                 target.NoCache,
-			PullPolicy:              pullPolicy,
-			Layers:                  options.Layers,
-		}
-		id, _, err := imagebuildah.BuildDockerfiles(ctx, options.Store, buildOptions, containerfile)
+		id, err := buildTarget(ctx, options, ids, f.Target[targetName])
 		if err != nil {
 			return err
 		}
@@ -126,6 +43,96 @@ func Build(ctx context.Context, options *BuildOptions) error {
 	}
 
 	return nil
+}
+
+func buildTarget(ctx context.Context, options *BuildOptions, ids map[string]string, target *Target) (string, error) {
+	contextDir, err := filepath.Abs(filepath.Join(options.Dir, target.Context))
+	if err != nil {
+		return "", err
+	}
+
+	var containerfile string
+	if target.Dockerfile != "" {
+		containerfile = filepath.Join(contextDir, target.Dockerfile)
+	} else {
+		var err error
+		containerfile, err = util.DiscoverContainerfile(contextDir)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	args := make(map[string]string)
+	for k, v := range target.Args {
+		if v != nil {
+			args[k] = *v
+		}
+	}
+
+	additionalContexts := make(map[string]*define.AdditionalBuildContext)
+	for name, value := range target.Contexts {
+		if dep, ok := strings.CutPrefix(value, "target:"); ok {
+			depID, ok := ids[dep]
+			if !ok {
+				panic("unreachable")
+			}
+			additionalContexts[name] = &define.AdditionalBuildContext{
+				IsImage: true,
+				Value:   depID,
+			}
+			continue
+		}
+
+		buildCtx, err := parse.GetAdditionalBuildContext(value)
+		if err != nil {
+			return "", err
+		}
+
+		// GetAdditionalBuildContext resolves paths relative to the current
+		// working directory
+		if !buildCtx.IsImage && !buildCtx.IsURL {
+			p, err := filepath.Abs(filepath.Join(options.Dir, value))
+			if err != nil {
+				return "", err
+			}
+			buildCtx.Value = p
+		}
+
+		additionalContexts[name] = &buildCtx
+	}
+
+	var platforms []struct{ OS, Arch, Variant string }
+	for _, value := range target.Platforms {
+		os, arch, variant, err := parse.Platform(value)
+		if err != nil {
+			return "", err
+		}
+		platforms = append(platforms, struct{ OS, Arch, Variant string }{os, arch, variant})
+	}
+
+	pullPolicy, err := parsePullPolicy(target.Pull)
+	if err != nil {
+		return "", err
+	}
+
+	buildOptions := define.BuildOptions{
+		Args:                    args,
+		Annotations:             target.Annotations,
+		ContextDirectory:        contextDir,
+		Target:                  target.Target,
+		AdditionalTags:          target.Tags,
+		AdditionalBuildContexts: additionalContexts,
+		Platforms:               platforms,
+		NoCache:                 target.NoCache,
+		PullPolicy:              pullPolicy,
+		Layers:                  options.Layers,
+	}
+	id, _, err := imagebuildah.BuildDockerfiles(ctx, options.Store, buildOptions, containerfile)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
 }
 
 func walkTarget(targets *[]string, seen map[string]struct{}, f *File, name string) error {
