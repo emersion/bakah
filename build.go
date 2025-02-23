@@ -60,7 +60,7 @@ func Build(ctx context.Context, options *BuildOptions) error {
 	sem := semaphore.NewWeighted(jobs)
 
 	for targetName, pt := range pendingTargets {
-		pt := pt // capture
+		targetName, pt := targetName, pt // capture
 		go func() {
 			defer close(pt.done)
 
