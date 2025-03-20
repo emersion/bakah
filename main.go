@@ -45,9 +45,19 @@ func main() {
 		targetNames = []string{"default"}
 	}
 
-	f, err := os.Open(filename)
-	if err != nil {
-		log.Fatalf("failed to open Bake file: %v", err)
+	var (
+		f       *os.File
+		dirname string
+	)
+	if filename == "-" {
+		f = os.Stdin
+	} else {
+		var err error
+		f, err = os.Open(filename)
+		if err != nil {
+			log.Fatalf("failed to open Bake file: %v", err)
+		}
+		dirname = filepath.Dir(filename)
 	}
 	defer f.Close()
 
@@ -66,7 +76,7 @@ func main() {
 	options := &BuildOptions{
 		Store:   store,
 		File:    bakefile,
-		Dir:     filepath.Dir(filename),
+		Dir:     dirname,
 		Targets: targetNames,
 		Layers:  layers,
 		Jobs:    jobs,
