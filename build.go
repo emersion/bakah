@@ -82,14 +82,14 @@ func Build(ctx context.Context, options *BuildOptions) error {
 }
 
 func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weighted, pendingTargets map[string]*pendingTarget, target *Target) (string, error) {
-	contextDir, err := filepath.Abs(filepath.Join(options.Dir, target.Context))
+	contextDir, err := filepath.Abs(resolvePath(options.Dir, target.Context))
 	if err != nil {
 		return "", err
 	}
 
 	var containerfile string
 	if target.Dockerfile != "" {
-		containerfile = filepath.Join(contextDir, target.Dockerfile)
+		containerfile = resolvePath(contextDir, target.Dockerfile)
 	} else {
 		var err error
 		containerfile, err = util.DiscoverContainerfile(contextDir)
@@ -216,4 +216,11 @@ func parsePullPolicy(value string) (define.PullPolicy, error) {
 	default:
 		return 0, fmt.Errorf("unknown pull policy %q", value)
 	}
+}
+
+func resolvePath(base, target string) string {
+	if filepath.IsAbs(target) {
+		return target
+	}
+	return filepath.Join(base, target)
 }
