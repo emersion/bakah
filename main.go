@@ -22,10 +22,12 @@ func main() {
 
 	var (
 		filenames []string
+		noCache   bool
 		layers    bool
 		jobs      int
 	)
 	pflag.StringArrayVarP(&filenames, "file", "f", nil, "Build definition file")
+	pflag.BoolVar(&noCache, "no-cache", false, "Do not use cache when building the image")
 	pflag.BoolVar(&layers, "layers", true, "Cache intermediate images during the build process")
 	pflag.IntVar(&jobs, "jobs", 1, "How many stages to run in parallel")
 	pflag.Parse()
@@ -64,6 +66,12 @@ func main() {
 	bakefile, err := Decode(f)
 	if err != nil {
 		log.Fatalf("failed to decode Bake file: %v", err)
+	}
+
+	if noCache {
+		for _, target := range bakefile.Target {
+			target.NoCache = true
+		}
 	}
 
 	store, err := getStore()
