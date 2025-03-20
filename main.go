@@ -25,7 +25,7 @@ func main() {
 		layers    bool
 		jobs      int
 	)
-	pflag.StringArrayVar(&filenames, "file", nil, "Build definition file")
+	pflag.StringArrayVarP(&filenames, "file", "f", nil, "Build definition file")
 	pflag.BoolVar(&layers, "layers", true, "Cache intermediate images during the build process")
 	pflag.IntVar(&jobs, "jobs", 1, "How many stages to run in parallel")
 	pflag.Parse()
