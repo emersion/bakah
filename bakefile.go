@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"strings"
 )
 
 type File struct {
@@ -16,8 +17,8 @@ type Target struct {
 	Args             map[string]*string  `json:"args"`
 	Annotations      []string            `json:"annotations"`
 	Attest           []map[string]string `json:"attest"`
-	CacheFrom        []map[string]string `json:"cache-from"`
-	CacheTo          []map[string]string `json:"cache-to"`
+	CacheFrom        []Props             `json:"cache-from"`
+	CacheTo          []Props             `json:"cache-to"`
 	Call             string              `json:"call"`
 	Context          string              `json:"context"`
 	Contexts         map[string]string   `json:"contexts"`
@@ -32,12 +33,12 @@ type Target struct {
 	Network          string              `json:"network"`
 	NoCacheFilter    []string            `json:"no-cache-filter"`
 	NoCache          bool                `json:"no-cache"`
-	Output           []map[string]string `json:"output"`
+	Output           []Props             `json:"output"`
 	Platforms        []string            `json:"platforms"`
 	Pull             string              `json:"pull"`
-	Secret           []map[string]string `json:"secret"`
+	Secret           []Props             `json:"secret"`
 	ShmSize          string              `json:"shm-size"`
-	SSH              []map[string]string `json:"ssh"`
+	SSH              []Props             `json:"ssh"`
 	Tags             []string            `json:"tags"`
 	Target           string              `json:"target"`
 	Ulimits          []string            `json:"ulimits"`
@@ -50,6 +51,30 @@ type Group struct {
 type Variable struct {
 	// TODO: unset vs null vs empty string
 	Default *string `json:"default"`
+}
+
+type Props map[string]string
+
+func (out *Props) UnmarshalJSON(b []byte) error {
+	props := make(map[string]string)
+
+	if len(b) > 0 && b[0] == '"' {
+		var raw string
+		if err := json.Unmarshal(b, &raw); err != nil {
+			return err
+		}
+		for _, kv := range strings.Split(raw, ",") {
+			k, v, _ := strings.Cut(kv, "=")
+			props[k] = v
+		}
+	} else {
+		if err := json.Unmarshal(b, &props); err != nil {
+			return err
+		}
+	}
+
+	*out = Props(props)
+	return nil
 }
 
 func Decode(r io.Reader) (*File, error) {
