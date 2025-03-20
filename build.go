@@ -105,6 +105,15 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 		}
 	}
 
+	var (
+		outputName     string
+		additionalTags []string
+	)
+	if len(target.Tags) > 0 {
+		outputName = target.Tags[0]
+		additionalTags = target.Tags[1:]
+	}
+
 	additionalContexts := make(map[string]*define.AdditionalBuildContext)
 	for name, value := range target.Contexts {
 		if dep, ok := strings.CutPrefix(value, "target:"); ok {
@@ -160,7 +169,8 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 		Annotations:             target.Annotations,
 		ContextDirectory:        contextDir,
 		Target:                  target.Target,
-		AdditionalTags:          target.Tags,
+		Output:                  outputName,
+		AdditionalTags:          additionalTags,
 		AdditionalBuildContexts: additionalContexts,
 		Platforms:               platforms,
 		NoCache:                 target.NoCache,
