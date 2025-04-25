@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -21,13 +22,15 @@ func main() {
 	unshare.MaybeReexecUsingUserNamespace(false)
 
 	var (
-		filenames []string
-		noCache   bool
-		layers    bool
-		jobs      int
+		filenames    []string
+		noCache      bool
+		metadataFile string
+		layers       bool
+		jobs         int
 	)
 	pflag.StringArrayVarP(&filenames, "file", "f", nil, "Build definition file")
 	pflag.BoolVar(&noCache, "no-cache", false, "Do not use cache when building the image")
+	pflag.StringVar(&metadataFile, "metadata-file", "", "Write build result metadata to a file")
 	pflag.BoolVar(&layers, "layers", true, "Cache intermediate images during the build process")
 	pflag.IntVar(&jobs, "jobs", 1, "How many stages to run in parallel")
 	pflag.Parse()
@@ -89,8 +92,15 @@ func main() {
 		Layers:  layers,
 		Jobs:    jobs,
 	}
-	if err := Build(ctx, options); err != nil {
+	metadata, err := Build(ctx, options)
+	if err != nil {
 		log.Fatal(err)
+	}
+
+	if metadataFile != "" {
+		if err := writeMetadataFile(metadataFile, metadata); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -106,4 +116,22 @@ func getStore() (storage.Store, error) {
 	}
 
 	return store, nil
+}
+
+func writeMetadataFile(filename string, metadata map[string]*BuildMetadata) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create metadata file: %v", err)
+	}
+	defer f.Close()
+
+	if err := json.NewEncoder(f).Encode(metadata); err != nil {
+		return fmt.Errorf("failed to encode metadata file: %v", err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("failed to close metadata file: %v", err)
+	}
+
+	return nil
 }
