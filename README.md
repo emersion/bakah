@@ -12,6 +12,10 @@ bakah can also be used to build Docker Compose projects:
 
     docker compose build --print | bakah -f -
 
+For HCL-based Bake files:
+
+    docker buildx bake --print | bakah -f -
+
 ## License
 
 MIT
