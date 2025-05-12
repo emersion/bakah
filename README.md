@@ -10,7 +10,7 @@ bakah can be used to build JSON Bake files:
 
 bakah can also be used to build Docker Compose projects:
 
-    docker compose build --print 2>&1 | bakah -f -
+    docker compose build --print | bakah -f -
 
 ## License
 
