@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 	"github.com/containers/buildah/imagebuildah"
 	"github.com/containers/buildah/pkg/parse"
 	"github.com/containers/buildah/pkg/util"
-	"github.com/containers/storage"
+	"go.podman.io/storage"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -177,6 +178,7 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 		PullPolicy:              pullPolicy,
 		Layers:                  options.Layers,
 		JobSemaphore:            sem,
+		ReportWriter:            os.Stderr,
 	}
 	id, _, err := imagebuildah.BuildDockerfiles(ctx, options.Store, buildOptions, containerfile)
 	if err != nil {

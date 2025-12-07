@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 
 	"github.com/containers/buildah/imagebuildah"
-	"github.com/containers/storage"
-	"github.com/containers/storage/pkg/unshare"
 	"github.com/spf13/pflag"
+	"go.podman.io/storage"
+	"go.podman.io/storage/pkg/unshare"
 )
 
 func main() {
