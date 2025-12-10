@@ -17,14 +17,20 @@ import (
 )
 
 type pendingTarget struct {
-	done chan struct{}
-	id   string
-	err  error
+	done     chan struct{}
+	id       string
+	metadata *BuildMetadata
+	err      error
 }
 
-func (pt *pendingTarget) Wait() (string, error) {
+func (pt *pendingTarget) Wait() (string, *BuildMetadata, error) {
 	<-pt.done
-	return pt.id, pt.err
+	return pt.id, pt.metadata, pt.err
+}
+
+type BuildMetadata struct {
+	Digest string `json:"containerimage.digest,omitempty"`
+	// TODO: add more fields
 }
 
 type BuildOptions struct {
@@ -36,14 +42,14 @@ type BuildOptions struct {
 	Jobs    int
 }
 
-func Build(ctx context.Context, options *BuildOptions) error {
+func Build(ctx context.Context, options *BuildOptions) (map[string]*BuildMetadata, error) {
 	f := options.File
 
 	var targetNames []string
 	seen := make(map[string]struct{})
 	for _, name := range options.Targets {
 		if err := walkTarget(&targetNames, seen, f, name); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -65,27 +71,31 @@ func Build(ctx context.Context, options *BuildOptions) error {
 		go func() {
 			defer close(pt.done)
 
-			id, err := buildTarget(ctx, options, sem, pendingTargets, f.Target[targetName])
+			id, metadata, err := buildTarget(ctx, options, sem, pendingTargets, f.Target[targetName])
 			pt.id = id
+			pt.metadata = metadata
 			pt.err = err
 		}()
 	}
 
 	var buildErr error
-	for _, pt := range pendingTargets {
-		_, buildErr = pt.Wait()
+	metadata := make(map[string]*BuildMetadata)
+	for targetName, pt := range pendingTargets {
+		var targetMetadata *BuildMetadata
+		_, targetMetadata, buildErr = pt.Wait()
 		if buildErr != nil {
 			break
 		}
+		metadata[targetName] = targetMetadata
 	}
 
-	return buildErr
+	return metadata, buildErr
 }
 
-func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weighted, pendingTargets map[string]*pendingTarget, target *Target) (string, error) {
+func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weighted, pendingTargets map[string]*pendingTarget, target *Target) (string, *BuildMetadata, error) {
 	contextDir, err := filepath.Abs(resolvePath(options.Dir, target.Context))
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	var containerfile string
@@ -95,7 +105,7 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 		var err error
 		containerfile, err = util.DiscoverContainerfile(contextDir)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
 
@@ -122,9 +132,9 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 			if !ok {
 				panic("unreachable")
 			}
-			depID, err := depPendingTarget.Wait()
+			depID, _, err := depPendingTarget.Wait()
 			if err != nil {
-				return "", err
+				return "", nil, err
 			}
 			additionalContexts[name] = &define.AdditionalBuildContext{
 				IsImage: true,
@@ -135,7 +145,7 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 
 		buildCtx, err := parse.GetAdditionalBuildContext(value)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		// GetAdditionalBuildContext resolves paths relative to the current
@@ -143,7 +153,7 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 		if !buildCtx.IsImage && !buildCtx.IsURL {
 			p, err := filepath.Abs(filepath.Join(options.Dir, value))
 			if err != nil {
-				return "", err
+				return "", nil, err
 			}
 			buildCtx.Value = p
 		}
@@ -155,14 +165,14 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 	for _, value := range target.Platforms {
 		os, arch, variant, err := parse.Platform(value)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 		platforms = append(platforms, struct{ OS, Arch, Variant string }{os, arch, variant})
 	}
 
 	pullPolicy, err := parsePullPolicy(target.Pull)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	buildOptions := define.BuildOptions{
@@ -180,12 +190,19 @@ func buildTarget(ctx context.Context, options *BuildOptions, sem *semaphore.Weig
 		JobSemaphore:            sem,
 		ReportWriter:            os.Stderr,
 	}
-	id, _, err := imagebuildah.BuildDockerfiles(ctx, options.Store, buildOptions, containerfile)
+	id, ref, err := imagebuildah.BuildDockerfiles(ctx, options.Store, buildOptions, containerfile)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return id, nil
+	var digest string
+	if ref != nil {
+		// TODO: ref is nil when define.BuildOptions.Output is empty
+		digest = ref.Digest().String()
+	}
+
+	metadata := &BuildMetadata{Digest: digest}
+	return id, metadata, nil
 }
 
 func walkTarget(targets *[]string, seen map[string]struct{}, f *File, name string) error {
